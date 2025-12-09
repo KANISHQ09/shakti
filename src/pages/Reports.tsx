@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { FileText, Download, Trash2, Calendar, Activity, FileDown } from 'lucide-react';
-import { storage } from '../utils/storage';
-import { AnalysisResult } from '../types';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { useState, useEffect } from "react";
+import { FileDown } from "lucide-react";
+import { storage } from "../utils/storage";
+import { AnalysisResult } from "../types";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function Reports() {
   const [history, setHistory] = useState<AnalysisResult[]>([]);
@@ -17,128 +17,219 @@ export default function Reports() {
   };
 
   const handleClearHistory = () => {
-    if (confirm('Are you sure you want to clear all analysis history?')) {
+    if (confirm("Are you sure you want to clear all analysis history?")) {
       storage.clearHistory();
       loadHistory();
     }
   };
 
-  // --- NEW PDF GENERATION FUNCTION ---
+  // ---------------------------------------------------------
+  // PDF GENERATION WITH AI INSIGHTS
+  // ---------------------------------------------------------
   const handleDownloadPDF = (analysis: AnalysisResult) => {
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const textWidth = pageWidth - margin * 2;
 
     // Title
     doc.setFontSize(20);
     doc.setTextColor(41, 128, 185);
-    doc.text('SHAKTI - Component Report', 20, 20);
+    doc.text("SHAKTI - Component Report", margin, 20);
 
-    // Component Details
+    // Basic Details
     doc.setFontSize(12);
     doc.setTextColor(60, 60, 60);
-    doc.text(`Component: ${analysis.componentName}`, 20, 40);
-    doc.text(`Analysis Date: ${new Date(analysis.timestamp).toLocaleString()}`, 20, 50);
-    doc.text(`Source File: ${analysis.filename}`, 20, 60);
+    doc.text(`Component: ${analysis.componentName}`, margin, 40);
+    doc.text(
+      `Analysis Date: ${new Date(analysis.timestamp).toLocaleString()}`,
+      margin,
+      50
+    );
+    doc.text(`Source File: ${analysis.filename}`, margin, 60);
 
-    // Health Summary
+    // Health Card
     doc.setFillColor(240, 240, 240);
-    doc.rect(20, 70, 170, 30, 'F');
+    doc.rect(margin, 70, pageWidth - 40, 30, "F");
     doc.setFontSize(14);
-    doc.text(`Health Score: ${analysis.health_score.toFixed(1)}%`, 30, 85);
-    doc.text(`Estimated RUL: ${analysis.rul_days.toFixed(0)} Days`, 30, 95);
-    
-    // Alert Level Badge
-    doc.setFontSize(12);
-    if(analysis.alert_level === 'OPTIMAL') doc.setTextColor(39, 174, 96);
-    else if(analysis.alert_level === 'WARNING') doc.setTextColor(243, 156, 18);
-    else doc.setTextColor(192, 57, 43);
-    doc.text(`Status: ${analysis.alert_level}`, 120, 85);
-
-    // Top Factors Table
     doc.setTextColor(0, 0, 0);
-    doc.text('Critical Risk Factors (Root Cause Analysis):', 20, 120);
-    
+    doc.text(`Health Score: ${analysis.health_score.toFixed(1)}%`, margin + 10, 85);
+    doc.text(`Estimated RUL: ${analysis.rul_days.toFixed(0)} Days`, margin + 10, 95);
+
+    // Alert Level Color
+    if (analysis.alert_level === "OPTIMAL") doc.setTextColor(39, 174, 96);
+    else if (analysis.alert_level === "WARNING") doc.setTextColor(243, 156, 18);
+    else doc.setTextColor(192, 57, 43);
+
+    doc.text(`Status: ${analysis.alert_level}`, margin + 120, 85);
+    doc.setTextColor(0, 0, 0);
+
+    // Table
+    doc.text("Critical Risk Factors (Root Cause Analysis):", margin, 120);
+
     const tableData = analysis.top_factors.map(([factor, impact]) => [
-      factor.replace(/_/g, ' '),
-      `${(impact * 100).toFixed(1)}%`
+      factor.replace(/_/g, " "),
+      `${(impact * 100).toFixed(1)}%`,
     ]);
 
     autoTable(doc, {
       startY: 125,
-      head: [['Factor Name', 'Impact Probability']],
+      head: [["Factor Name", "Impact Probability"]],
       body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185] }
+      theme: "grid",
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    // -----------------------------------------------------
+    // AI INSIGHTS (AUTO WRAPPED)
+    // -----------------------------------------------------
+    const lastAuto = (doc as any).lastAutoTable;
+    let y = (lastAuto?.finalY ?? 140) + 20;
+
+    doc.setFontSize(16);
+    doc.setTextColor(41, 128, 185);
+    doc.text("🔍 AI Diagnostic Summary", margin, y);
+
+    y += 12;
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+
+    const insights: string[] = [];
+
+    // Insight 1 – Health
+    const healthInsight =
+      analysis.health_score > 80
+        ? "The component is operating normally with minimal signs of wear."
+        : analysis.health_score > 50
+        ? "Moderate wear detected. The component may begin degrading faster."
+        : "Severe degradation detected. Reliability is significantly reduced.";
+    insights.push(`• Health Interpretation: ${healthInsight}`);
+
+    // Insight 2 – RUL
+    const rulInsight =
+      analysis.rul_days > 150
+        ? "Long lifespan remaining. No urgent action required."
+        : analysis.rul_days > 60
+        ? "Medium lifespan remaining. Preventive maintenance advised soon."
+        : "Low RUL detected. Immediate service or replacement recommended.";
+    insights.push(`• Remaining Useful Life: ${rulInsight}`);
+
+    // Insight 3 – Status
+    const statusInsight =
+      analysis.alert_level === "OPTIMAL"
+        ? "System conditions are stable. Continue routine monitoring."
+        : analysis.alert_level === "WARNING"
+        ? "Performance anomalies detected. Schedule diagnostic checks."
+        : "Critical failure risk detected. Inspection is required immediately.";
+    insights.push(`• Status Evaluation: ${statusInsight}`);
+
+    // Insight 4 – Top Factor
+    const topFactor = analysis.top_factors[0];
+    if (topFactor) {
+      insights.push(
+        `• Main Risk Driver: "${topFactor[0].replace(/_/g, " ")}" contributes ${(topFactor[1] * 100).toFixed(1)}% to degradation.`
+      );
+    }
+
+    // Insight 5 – Maintenance Suggestion
+    const maintAdvice =
+      analysis.alert_level === "CRITICAL"
+        ? "⚠ Immediate engineering inspection recommended."
+        : analysis.alert_level === "WARNING"
+        ? "🛠 Plan preventive maintenance soon."
+        : "✔ No urgent actions required.";
+    insights.push(`• Maintenance Advice: ${maintAdvice}`);
+
+    // WRITE INSIGHTS WITH AUTO WRAP + PAGE HANDLING
+    insights.forEach((text) => {
+      const wrappedText = doc.splitTextToSize(text, textWidth);
+      const textHeight = wrappedText.length * 7;
+
+      if (y + textHeight > 270) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.text(wrappedText, margin, y);
+      y += textHeight + 5;
     });
 
     // Footer
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
     doc.setFontSize(10);
     doc.setTextColor(150, 150, 150);
-    doc.text('Generated by SubStation AI Predictive Maintenance System', 20, 280);
+    doc.text("Generated by AI Predictive Maintenance System", margin, 285);
 
     doc.save(`Report_${analysis.componentName}_${Date.now()}.pdf`);
   };
 
-  // ... (keep getAlertBadge helper) ...
   const getAlertBadge = (level: string) => {
     const styles = {
-      OPTIMAL: 'bg-green-100 text-green-700 border-green-200',
-      WARNING: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-      CRITICAL: 'bg-red-100 text-red-700 border-red-200',
+      OPTIMAL: "bg-green-100 text-green-700 border-green-200",
+      WARNING: "bg-yellow-100 text-yellow-700 border-yellow-200",
+      CRITICAL: "bg-red-100 text-red-700 border-red-200",
     };
     return styles[level as keyof typeof styles] || styles.OPTIMAL;
   };
 
   return (
-    // Add a default text color and dark-mode white fallback on the parent
     <div className="space-y-6 text-slate-900 dark:text-white">
-      {/* ... (Keep header and stats cards same as before) ... */}
-      
-      {/* Updated Table Section */}
       {history.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+            <div className="text-sm font-medium">Analysis Reports</div>
+            <button
+              onClick={handleClearHistory}
+              className="px-3 py-1.5 bg-red-50 text-red-600 rounded-md hover:bg-red-100 border dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+            >
+              Clear History
+            </button>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Component</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Health</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">RUL (Days)</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Report</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold">Component</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold">Date</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold">Health</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold">RUL (Days)</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold">Report</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {history.map((analysis) => (
-                  <tr key={analysis.id} className="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                  <tr key={analysis.id} className="hover:bg-slate-50 dark:hover:bg-slate-700">
                     <td className="px-6 py-4">
-                      <div className="font-medium text-slate-800 dark:text-slate-100">{analysis.componentName}</div>
-                      <div className="text-sm text-slate-500 dark:text-slate-400">{analysis.filename}</div>
+                      <div className="font-medium">{analysis.componentName}</div>
+                      <div className="text-sm opacity-70">{analysis.filename}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">
-                      {new Date(analysis.timestamp).toLocaleDateString()}
-                    </td>
+
+                    <td className="px-6 py-4">{new Date(analysis.timestamp).toLocaleDateString()}</td>
+
+                    <td className="px-6 py-4 font-semibold">{analysis.health_score.toFixed(1)}%</td>
+
+                    <td className="px-6 py-4 font-medium">{analysis.rul_days.toFixed(0)}</td>
+
                     <td className="px-6 py-4">
-                      <span className={`font-semibold ${
-                        analysis.health_score > 80 ? 'text-green-600 dark:text-green-400' : 
-                        analysis.health_score > 50 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        {analysis.health_score.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-800 dark:text-slate-100">
-                      {analysis.rul_days.toFixed(0)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-md text-xs font-semibold border ${getAlertBadge(analysis.alert_level)}`}>
+                      <span
+                        className={`px-3 py-1 rounded-md text-xs font-semibold border ${getAlertBadge(
+                          analysis.alert_level
+                        )}`}
+                      >
                         {analysis.alert_level}
                       </span>
                     </td>
+
                     <td className="px-6 py-4">
                       <button
                         onClick={() => handleDownloadPDF(analysis)}
-                        className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors text-xs font-medium border border-blue-200 dark:bg-slate-700 dark:text-white dark:border-slate-600 dark:hover:bg-slate-600"
-                        title="Download PDF Report"
+                        className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 border dark:bg-slate-700 dark:border-slate-600 dark:text-white"
                       >
                         <FileDown className="w-4 h-4" />
                         <span>PDF</span>
@@ -151,8 +242,10 @@ export default function Reports() {
           </div>
         </div>
       )}
-      
-      {/* ... (Keep empty state view same as before) ... */}
+
+      {history.length === 0 && (
+        <div className="text-center py-20 opacity-70">No reports available.</div>
+      )}
     </div>
   );
 }
